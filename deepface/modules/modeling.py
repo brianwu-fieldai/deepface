@@ -8,6 +8,7 @@ from deepface.models.facial_recognition import (
     FbDeepFace,
     DeepID,
     ArcFace,
+    ArcFaceTorchONNX,
     SFace,
     Dlib,
     Facenet,
@@ -59,6 +60,7 @@ def build_model(task: str, model_name: str) -> Any:
             "DeepID": DeepID.DeepIdClient,
             "Dlib": Dlib.DlibClient,
             "ArcFace": ArcFace.ArcFaceClient,
+            "ArcFaceTorchONNX": ArcFaceTorchONNX.ArcFaceTorchONNXClient,
             "SFace": SFace.SFaceClient,
             "GhostFaceNet": GhostFaceNet.GhostFaceNetClient,
             "Buffalo_L": Buffalo_L.Buffalo_L
