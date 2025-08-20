@@ -11,6 +11,9 @@ from onnx2torch import convert
 # import the same ABC so we "fit" DeepFace's expected interface
 from deepface.models.FacialRecognition import FacialRecognition
 
+# Hard code the weights path for the ONNX model.
+WEIGHTS_PATH = Path("/Users/brianwu/Documents/Projects/FieldAI/deepface/test_conversion/cvtd_arcface.onnx")
+
 
 def pick_device(prefer_mps: bool = True) -> torch.device:
     """
@@ -23,7 +26,7 @@ def pick_device(prefer_mps: bool = True) -> torch.device:
     return torch.device("cpu")
 
 
-class ArcFaceTorchClient(FacialRecognition):
+class ArcFaceTorchONNXClient(FacialRecognition):
     """
     ArcFace client that uses PyTorch and onnx2torch under the hood,
     but conforms to DeepFace's FacialRecognition interface.
@@ -35,17 +38,17 @@ class ArcFaceTorchClient(FacialRecognition):
 
     def __init__(
         self,
-        onnx_path: Union[str, Path],
+        onnx_path: Union[str, Path] = WEIGHTS_PATH,
         device: Optional[torch.device] = None,
         dtype: torch.dtype = torch.float32,
         expects_nhwc: Optional[bool] = None,  # if None, we auto-detect from ONNX
     ):
         # Interface fields expected by FacialRecognition
-        self.model_name = "ArcFace"
+        self.model_name = "ArcFaceTorchONNX"
         self.input_shape: Tuple[int, int] = (112, 112)
         self.output_shape: int = 512
 
-        self.onnx_path = str(onnx_path)
+        self.onnx_path = WEIGHTS_PATH
         self.device = device or pick_device()
         self.dtype = dtype
 
