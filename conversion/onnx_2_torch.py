@@ -12,6 +12,10 @@ def convert_onnx_to_torch(input_model_path: str, output_model_path: str, print_m
     Args:
         input_model_path (str): Path to the input ONNX model file.
         output_model_path (str): Path to save the converted PyTorch model.
+        print_model_tensors (bool): If True, prints the model tensors after conversion.
+        
+    Returns:
+        None: Saves the converted model to the specified path.
     """
     onnx_model = onnx.load(input_model_path)
     pt_model = convert(onnx_model)
