@@ -255,15 +255,148 @@ def convert_keras_weights_to_pytorch(h5_weights_path: str, pytorch_model: Any) -
         
         logger.info(f"Converting Keras weights from {h5_weights_path} to PyTorch format")
         
-        # This is a placeholder - actual implementation would need to:
-        # 1. Load the .h5 file
-        # 2. Map Keras layer names to PyTorch layer names
-        # 3. Convert weight formats (e.g., Conv2D weights need transposition)
-        # 4. Load weights into the PyTorch model
-        
-        logger.info("Weight conversion not implemented - you need to implement the conversion logic")
-        
-        return pytorch_model
-        
+        # Load the H5 weights file
+        with h5py.File(h5_weights_path, 'r') as f:
+            # Get PyTorch model's state dict
+            pytorch_state_dict = pytorch_model.state_dict()
+            
+            # Mapping between Keras layer names and PyTorch layer names
+            # Based on the emotion model architecture
+            keras_to_pytorch_mapping = {
+                # Conv2D layers - Keras uses 'conv2d' naming
+                'conv2d/kernel:0': 'conv1.weight',
+                'conv2d/bias:0': 'conv1.bias',
+                'conv2d_1/kernel:0': 'conv2.weight',
+                'conv2d_1/bias:0': 'conv2.bias',
+                'conv2d_2/kernel:0': 'conv3.weight',
+                'conv2d_2/bias:0': 'conv3.bias',
+                'conv2d_3/kernel:0': 'conv4.weight',
+                'conv2d_3/bias:0': 'conv4.bias',
+                'conv2d_4/kernel:0': 'conv5.weight',
+                'conv2d_4/bias:0': 'conv5.bias',
+                
+                # Dense layers - Keras uses 'dense' naming
+                'dense/kernel:0': 'fc1.weight',
+                'dense/bias:0': 'fc1.bias',
+                'dense_1/kernel:0': 'fc2.weight',
+                'dense_1/bias:0': 'fc2.bias',
+                'dense_2/kernel:0': 'fc3.weight',
+                'dense_2/bias:0': 'fc3.bias',
+            }
+            
+            # Function to recursively find weights in HDF5 group
+            def extract_weights_from_group(group, prefix=""):
+                weights = {}
+                for key in group.keys():
+                    if isinstance(group[key], h5py.Group):
+                        # Recursively search in subgroups
+                        subweights = extract_weights_from_group(group[key], f"{prefix}{key}/")
+                        weights.update(subweights)
+                    elif isinstance(group[key], h5py.Dataset):
+                        # Found a weight dataset
+                        weight_name = f"{prefix}{key}"
+                        weights[weight_name] = group[key][:]
+                return weights
+            
+            # Extract all weights from the H5 file
+            all_keras_weights = extract_weights_from_group(f)
+            
+            logger.info(f"Found {len(all_keras_weights)} weight tensors in Keras model")
+            logger.info(f"Available Keras weights: {list(all_keras_weights.keys())}")
+            
+            # Convert and load weights
+            converted_count = 0
+            for keras_name, pytorch_name in keras_to_pytorch_mapping.items():
+                if keras_name in all_keras_weights:
+                    keras_weight = all_keras_weights[keras_name]
+                    
+                    # Convert weight format based on layer type
+                    if 'kernel' in keras_name and len(keras_weight.shape) == 4:
+                        # Conv2D weights: Keras (H, W, C_in, C_out) -> PyTorch (C_out, C_in, H, W)
+                        pytorch_weight = np.transpose(keras_weight, (3, 2, 0, 1))
+                        logger.info(f"Converting Conv2D {keras_name}: {keras_weight.shape} -> {pytorch_weight.shape}")
+                        
+                    elif 'kernel' in keras_name and len(keras_weight.shape) == 2:
+                        # Dense weights: Keras (input, output) -> PyTorch (output, input)
+                        pytorch_weight = np.transpose(keras_weight, (1, 0))
+                        logger.info(f"Converting Dense {keras_name}: {keras_weight.shape} -> {pytorch_weight.shape}")
+                        
+                    else:
+                        # Bias weights - no conversion needed
+                        pytorch_weight = keras_weight
+                        logger.info(f"Converting bias {keras_name}: shape {keras_weight.shape}")
+                    
+                    # Load into PyTorch model
+                    if pytorch_name in pytorch_state_dict:
+                        pytorch_state_dict[pytorch_name] = torch.from_numpy(pytorch_weight.copy())
+                        converted_count += 1
+                        logger.info(f"✓ Loaded {keras_name} -> {pytorch_name}")
+                    else:
+                        logger.info(f"✗ PyTorch layer {pytorch_name} not found in model")
+                else:
+                    logger.info(f"✗ Keras weight {keras_name} not found in H5 file")
+            
+            # Load the converted weights into the model
+            pytorch_model.load_state_dict(pytorch_state_dict)
+            logger.info(f"Successfully converted and loaded {converted_count} weight tensors")
+            
+            return pytorch_model
+            
     except ImportError as e:
         raise ImportError(f"Required libraries not available: {e}")
+    except Exception as e:
+        logger.info(f"Error during weight conversion: {str(e)}")
+        logger.info("Available H5 file structure:")
+        
+        # Print H5 file structure for debugging
+        try:
+            with h5py.File(h5_weights_path, 'r') as f:
+                def print_structure(name, obj):
+                    logger.info(f"  {name}: {type(obj)}")
+                    if isinstance(obj, h5py.Dataset):
+                        logger.info(f"    Shape: {obj.shape}, Type: {obj.dtype}")
+                f.visititems(print_structure)
+        except Exception as debug_e:
+            logger.info(f"Could not read H5 structure: {debug_e}")
+            
+        raise e
+
+
+def load_pytorch_emotion_model_with_keras_weights(
+    h5_weights_path: Union[str, None] = None, 
+    url: str = WEIGHTS_URL
+) -> Any:
+    """
+    Create PyTorch emotion model and load converted Keras weights
+    Args:
+        h5_weights_path: Path to local H5 weights file
+        url: URL to download weights if local file not provided
+    Returns:
+        PyTorch model with loaded weights
+    """
+    try:
+        import torch
+        
+        # Create PyTorch model
+        model = create_pytorch_emotion_model()
+        
+        # Get weights file
+        if h5_weights_path is None:
+            # Download weights if not provided
+            weight_file = weight_utils.download_weights_if_necessary(
+                file_name="facial_expression_model_weights.h5", 
+                source_url=url
+            )
+        else:
+            weight_file = h5_weights_path
+            
+        # Convert and load Keras weights
+        model = convert_keras_weights_to_pytorch(weight_file, model)
+        
+        model.eval()
+        logger.info("Successfully created PyTorch emotion model with converted Keras weights")
+        
+        return model
+        
+    except ImportError:
+        raise ImportError("PyTorch is required to load PyTorch emotion model")
