@@ -31,7 +31,6 @@ import sys
 import json
 from pathlib import Path
 from typing import List, Optional, Dict, Any
-import tensorflow as tf, keras
 
 def _lazy_import():
     try:
@@ -528,7 +527,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     return p
 
-def main(argv: Optional[List[str]] = None) -> int:
+def main(argv: Optional[List[str]] = None) -> Optional[int]:
     parser = build_parser()
     args = parser.parse_args(argv)
     try:
