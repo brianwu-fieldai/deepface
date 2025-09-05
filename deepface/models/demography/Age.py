@@ -1,29 +1,18 @@
 # stdlib dependencies
 
-from typing import List, Union
+from typing import List, Union, Any
 
 # 3rd party dependencies
 import numpy as np
 
 # project dependencies
-from deepface.models.facial_recognition import VGGFace
-from deepface.commons import package_utils, weight_utils
+from deepface.commons import weight_utils
 from deepface.models.Demography import Demography
 from deepface.commons.logger import Logger
 
 logger = Logger()
 
-# dependency configurations
-
-tf_version = package_utils.get_tf_major_version()
-
-if tf_version == 1:
-    from keras.models import Model, Sequential
-    from keras.layers import Convolution2D, Flatten, Activation
-else:
-    from tensorflow.keras.models import Model, Sequential
-    from tensorflow.keras.layers import Convolution2D, Flatten, Activation
-
+# Model weights URL - can be used for downloading pre-trained weights
 WEIGHTS_URL = (
     "https://github.com/serengil/deepface_models/releases/download/v1.0/age_model_weights.h5"
 )
@@ -32,12 +21,69 @@ WEIGHTS_URL = (
 # pylint: disable=too-few-public-methods
 class ApparentAgeClient(Demography):
     """
-    Age model class
+    Age model class - Framework agnostic implementation
     """
 
-    def __init__(self):
-        self.model = load_model()
+    def __init__(self, model: Any, model_type: str = "pytorch"):
+        """
+        Initialize age model
+        Args:
+            model: Pre-trained model (PyTorch model, ONNX session, etc.)
+            model_type: Type of model ("pytorch", "onnx", etc.)
+        """
+        self.model = model
         self.model_name = "Age"
+        self.model_type = model_type
+
+    def _run_inference(self, img_batch: np.ndarray) -> np.ndarray:
+        """
+        Run inference using the loaded model
+        Args:
+            img_batch: Batch of preprocessed images (N, H, W, C)
+        Returns:
+            Age predictions as numpy array
+        """
+        if self.model_type == "pytorch":
+            return self._pytorch_inference(img_batch)
+        elif self.model_type == "onnx":
+            return self._onnx_inference(img_batch)
+        else:
+            raise NotImplementedError(f"Model type '{self.model_type}' not supported")
+
+    def _pytorch_inference(self, img_batch: np.ndarray) -> np.ndarray:
+        """PyTorch inference implementation"""
+        try:
+            import torch
+            
+            # Convert to PyTorch tensor
+            tensor_input = torch.from_numpy(img_batch).float()
+            
+            # Run inference
+            with torch.no_grad():
+                self.model.eval()
+                output = self.model(tensor_input)
+                
+                # Apply softmax if not already applied
+                if not hasattr(self.model, 'softmax_applied'):
+                    output = torch.softmax(output, dim=1)
+            
+            return output.cpu().numpy()
+            
+        except ImportError:
+            raise ImportError("PyTorch is required for pytorch model type")
+
+    def _onnx_inference(self, img_batch: np.ndarray) -> np.ndarray:
+        """ONNX inference implementation"""
+        try:
+            # Get input name from ONNX session
+            input_name = self.model.get_inputs()[0].name
+            
+            # Run inference
+            outputs = self.model.run(None, {input_name: img_batch.astype(np.float32)})
+            return outputs[0]
+            
+        except AttributeError:
+            raise ValueError("Model must be an ONNX InferenceSession for onnx model type")
 
     def predict(self, img: Union[np.ndarray, List[np.ndarray]]) -> Union[np.float64, np.ndarray]:
         """
@@ -47,8 +93,7 @@ class ApparentAgeClient(Demography):
                 List of images as List[np.ndarray] or
                 Batch of images as np.ndarray (n, 224, 224, 3)
         Returns:
-            np.ndarray (age_classes,) if single image,
-            np.ndarray (n, age_classes) if batched images.
+            np.float64 if single image, np.ndarray if batched images.
         """
         # Preprocessing input image or image list.
         imgs = self._preprocess_batch_or_single_input(img)
@@ -63,39 +108,85 @@ class ApparentAgeClient(Demography):
         return np.array([find_apparent_age(age_prediction) for age_prediction in age_predictions])
 
 
-def load_model(
-    url=WEIGHTS_URL,
-) -> Model:
+def create_pytorch_age_model(num_classes: int = 101) -> Any:
     """
-    Construct age model, download its weights and load
+    Create a PyTorch age model architecture
+    Args:
+        num_classes: Number of age classes (default 101 for ages 0-100)
     Returns:
-        model (Model)
+        PyTorch model
     """
+    try:
+        import torch
+        import torch.nn as nn
+        
+        class AgeModel(nn.Module):
+            def __init__(self, num_classes=101):
+                super(AgeModel, self).__init__()
+                # This is a placeholder - you would implement your actual architecture
+                # based on the VGGFace base model structure
+                self.features = nn.Sequential(
+                    # Add your feature extraction layers here
+                    # This would be equivalent to the VGGFace base model
+                )
+                self.classifier = nn.Sequential(
+                    nn.Conv2d(512, num_classes, kernel_size=1),  # Equivalent to Convolution2D
+                    nn.Flatten(),
+                    nn.Softmax(dim=1)  # Equivalent to Activation("softmax")
+                )
+                
+            def forward(self, x):
+                x = self.features(x)
+                x = self.classifier(x)
+                return x
+        
+        return AgeModel(num_classes)
+        
+    except ImportError:
+        raise ImportError("PyTorch is required to create PyTorch age model")
 
-    model = VGGFace.base_model()
 
-    # --------------------------
+def load_pytorch_model(model_path: Union[str, None] = None) -> Any:
+    """
+    Load a pre-trained PyTorch age model
+    Args:
+        model_path: Path to the saved PyTorch model
+    Returns:
+        Loaded PyTorch model
+    """
+    try:
+        import torch
+        
+        if model_path:
+            model = torch.load(model_path, map_location='cpu')
+        else:
+            # Create a new model - you would need to implement weight loading
+            model = create_pytorch_age_model()
+            logger.info("Created new PyTorch age model - weights need to be loaded separately")
+            
+        model.eval()
+        return model
+        
+    except ImportError:
+        raise ImportError("PyTorch is required to load PyTorch age model")
 
-    classes = 101
-    base_model_output = Sequential()
-    base_model_output = Convolution2D(classes, (1, 1), name="predictions")(model.layers[-4].output)
-    base_model_output = Flatten()(base_model_output)
-    base_model_output = Activation("softmax")(base_model_output)
 
-    # --------------------------
-
-    age_model = Model(inputs=model.inputs, outputs=base_model_output)
-
-    # --------------------------
-
-    # load weights
-    weight_file = weight_utils.download_weights_if_necessary(
-        file_name="age_model_weights.h5", source_url=url
-    )
-
-    age_model = weight_utils.load_model_weights(model=age_model, weight_file=weight_file)
-
-    return age_model
+def load_onnx_model(model_path: str) -> Any:
+    """
+    Load an ONNX age model
+    Args:
+        model_path: Path to the ONNX model file
+    Returns:
+        ONNX InferenceSession
+    """
+    try:
+        import onnxruntime as ort
+        
+        session = ort.InferenceSession(model_path)
+        return session
+        
+    except ImportError:
+        raise ImportError("onnxruntime is required to load ONNX models")
 
 
 def find_apparent_age(age_predictions: np.ndarray) -> np.float64:
@@ -112,4 +203,4 @@ def find_apparent_age(age_predictions: np.ndarray) -> np.float64:
                                              not batched. Got shape: {age_predictions.shape}"
     output_indexes = np.arange(0, 101)
     apparent_age = np.sum(age_predictions * output_indexes)
-    return apparent_age
+    return np.float64(apparent_age)

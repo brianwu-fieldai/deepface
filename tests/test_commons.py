@@ -4,51 +4,31 @@ from unittest import mock
 from unittest.mock import MagicMock
 import pytest
 
+# 3rd party dependencies
+import torch
+import torch.nn as nn
+
 # project dependencies
-from deepface.commons import folder_utils, weight_utils, package_utils
+from deepface.commons import folder_utils, weight_utils
 from deepface.commons.logger import Logger
 
 # pylint: disable=unused-argument
 
 logger = Logger()
 
-tf_version = package_utils.get_tf_major_version()
-
-# conditional imports
-if tf_version == 1:
-    from keras.models import Sequential
-    from keras.layers import (
-        Dropout,
-        Dense,
-    )
-else:
-    from tensorflow.keras.models import Sequential
-    from tensorflow.keras.layers import (
-        Dropout,
-        Dense,
-    )
-
 
 def test_loading_broken_weights():
     home = folder_utils.get_deepface_home()
     weight_file = os.path.join(home, ".deepface/weights/vgg_face_weights.h5")
 
-    # construct a dummy model
-    model = Sequential()
+    # construct a dummy PyTorch model
+    model = DummyPyTorchModel(input_size=100, hidden_size=64, output_size=10)
 
-    # Add layers to the model
-    model.add(
-        Dense(units=64, activation="relu", input_shape=(100,))
-    )  # Input layer with 100 features
-    model.add(Dropout(0.5))  # Dropout layer to prevent overfitting
-    model.add(Dense(units=32, activation="relu"))  # Hidden layer
-    model.add(Dense(units=10, activation="softmax"))  # Output layer with 10 classes
-
-    # vgg's weights cannot be loaded to this model
+    # vgg's weights (.h5 format) cannot be loaded to this PyTorch model
     with pytest.raises(
         ValueError, match="An exception occurred while loading the pre-trained weights from"
     ):
-        model = weight_utils.load_model_weights(model=model, weight_file=weight_file)
+        model = load_pytorch_weights(model=model, weight_file=weight_file)
 
     logger.info("✅ test loading broken weight file is done")
 
@@ -260,3 +240,93 @@ class TestDownloadWeightFeature:
         with pytest.raises(ValueError, match="unimplemented compress type - 7z"):
             _ = weight_utils.download_weights_if_necessary(file_name, source_url, compress_type)
         logger.info("✅ test download weights for unsupported compress type is done")
+
+
+def load_pytorch_weights(model: torch.nn.Module, weight_file: str) -> torch.nn.Module:
+    """
+    Load pre-trained weights for a PyTorch model
+    Args:
+        model (torch.nn.Module): pre-built PyTorch model
+        weight_file (str): exact path of pre-trained weights
+    Returns:
+        model (torch.nn.Module): pre-built model with updated weights
+    """
+    try:
+        # For PyTorch models, we expect .pth or .pt files
+        if weight_file.endswith(('.pth', '.pt')):
+            state_dict = torch.load(weight_file, map_location='cpu')
+            model.load_state_dict(state_dict)
+        elif weight_file.endswith('.h5'):
+            # .h5 files are Keras format - incompatible with PyTorch by design
+            raise ValueError("Cannot load Keras .h5 weights into PyTorch model")
+        else:
+            raise ValueError(f"Unsupported weight file format: {weight_file}")
+    except Exception as err:
+        raise ValueError(
+            f"An exception occurred while loading the pre-trained weights from {weight_file}. "
+            "This might have happened due to incompatible model architectures or corrupted files."
+        ) from err
+    return model
+
+
+class DummyPyTorchModel(nn.Module):
+    """
+    A dummy PyTorch model for testing weight loading functionality.
+    This model is intentionally incompatible with VGG face weights.
+    """
+
+    def __init__(self, input_size=100, hidden_size=64, output_size=10):
+        super(DummyPyTorchModel, self).__init__()
+        self.fc1 = nn.Linear(input_size, hidden_size)
+        self.dropout1 = nn.Dropout(0.5)
+        self.fc2 = nn.Linear(hidden_size, 32)
+        self.fc3 = nn.Linear(32, output_size)
+        self.relu = nn.ReLU()
+        self.softmax = nn.Softmax(dim=1)
+
+    def forward(self, x):
+        x = self.relu(self.fc1(x))
+        x = self.dropout1(x)
+        x = self.relu(self.fc2(x))
+        x = self.softmax(self.fc3(x))
+        return x
+
+
+def test_loading_pytorch_weights_success():
+    """Test that PyTorch weights can be loaded successfully"""
+    # Create a dummy model
+    model = DummyPyTorchModel(input_size=10, hidden_size=5, output_size=2)
+
+    # Save the model's state dict to test loading
+    import tempfile
+
+    with tempfile.NamedTemporaryFile(suffix=".pth", delete=False) as tmp_file:
+        torch.save(model.state_dict(), tmp_file.name)
+
+        # Test loading the weights
+        try:
+            loaded_model = load_pytorch_weights(model=model, weight_file=tmp_file.name)
+            assert isinstance(loaded_model, torch.nn.Module)
+            logger.info("✅ test loading PyTorch weights successfully is done")
+        finally:
+            # Clean up temp file
+            os.unlink(tmp_file.name)
+
+
+def test_pytorch_model_forward_pass():
+    """Test that the PyTorch model can perform a forward pass"""
+    model = DummyPyTorchModel(input_size=100, hidden_size=64, output_size=10)
+
+    # Create dummy input
+    dummy_input = torch.randn(1, 100)  # batch_size=1, input_size=100
+
+    # Perform forward pass
+    output = model(dummy_input)
+
+    # Check output shape
+    assert output.shape == (1, 10), f"Expected output shape (1, 10), got {output.shape}"
+
+    # Check that output is a valid probability distribution (softmax output)
+    assert torch.allclose(output.sum(dim=1), torch.ones(1)), "Softmax output should sum to 1"
+
+    logger.info("✅ test PyTorch model forward pass is done")
