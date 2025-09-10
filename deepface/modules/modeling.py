@@ -1,19 +1,7 @@
 # built-in dependencies
 from typing import Any
 
-# project dependencies
-from deepface.models.facial_recognition import (
-    VGGFace,
-    OpenFace,
-    FbDeepFace,
-    DeepID,
-    ArcFace,
-    SFace,
-    Dlib,
-    Facenet,
-    GhostFaceNet,
-    Buffalo_L
-)
+# Import face detection models (these work without TensorFlow)
 from deepface.models.face_detection import (
     FastMtCnn,
     MediaPipe,
@@ -25,9 +13,93 @@ from deepface.models.face_detection import (
     Yolo as YoloFaceDetector,
     YuNet,
     CenterFace,
+    YoloX,  # Add YoloX import
 )
 from deepface.models.demography import Age, Gender, Race, Emotion
 from deepface.models.spoofing import FasNet
+
+# Dynamically import facial recognition models
+facial_recognition_models = {}
+
+# Try to import TensorFlow-free models first
+try:
+    from deepface.models.facial_recognition.VGGFaceTorchONNX import VggFaceTorchONNXClient
+    facial_recognition_models['VGG-Face'] = VggFaceTorchONNXClient
+except ImportError:
+    pass
+
+try:
+    from deepface.models.facial_recognition.ArcFaceTorchONNX import ArcFaceTorchONNXClient
+    facial_recognition_models['ArcFace'] = ArcFaceTorchONNXClient
+    facial_recognition_models['ArcFaceTorchONNX'] = ArcFaceTorchONNXClient
+except ImportError:
+    pass
+
+try:
+    from deepface.models.facial_recognition.FacenetTorchONNX import FaceNetTorchONNXClient
+    facial_recognition_models['Facenet'] = FaceNetTorchONNXClient
+    facial_recognition_models['Facenet512'] = FaceNetTorchONNXClient
+except ImportError:
+    pass
+
+try:
+    from deepface.models.facial_recognition.DeepIDTorchONNX import DeepIdTorchONNXClient
+    facial_recognition_models['DeepID'] = DeepIdTorchONNXClient
+except ImportError:
+    pass
+
+try:
+    from deepface.models.facial_recognition.GhostFaceNetTorchONNX import GhostFaceNetTorchONNXClient
+    facial_recognition_models['GhostFaceNet'] = GhostFaceNetTorchONNXClient
+except ImportError:
+    pass
+
+try:
+    from deepface.models.facial_recognition.TinyTorchFace import TinyTorchFaceClient
+    facial_recognition_models['TinyTorchFace'] = TinyTorchFaceClient
+except ImportError:
+    pass
+
+try:
+    from deepface.models.facial_recognition.Buffalo_L import Buffalo_L
+    facial_recognition_models['Buffalo_L'] = Buffalo_L
+except ImportError:
+    pass
+
+# Fallback to TensorFlow models if available
+try:
+    from deepface.models.facial_recognition import (
+        VGGFace,
+        OpenFace,
+        FbDeepFace,
+        DeepID,
+        ArcFace,
+        SFace,
+        Dlib,
+        Facenet,
+        GhostFaceNet,
+    )
+    # Only add TensorFlow models if TorchONNX versions aren't available
+    if 'VGG-Face' not in facial_recognition_models:
+        facial_recognition_models['VGG-Face'] = VGGFace.VggFaceClient
+    if 'ArcFace' not in facial_recognition_models:
+        facial_recognition_models['ArcFace'] = ArcFace.ArcFaceClient
+    if 'Facenet' not in facial_recognition_models:
+        facial_recognition_models['Facenet'] = Facenet.FaceNet128dClient
+        facial_recognition_models['Facenet512'] = Facenet.FaceNet512dClient
+    if 'DeepID' not in facial_recognition_models:
+        facial_recognition_models['DeepID'] = DeepID.DeepIdClient
+    if 'GhostFaceNet' not in facial_recognition_models:
+        facial_recognition_models['GhostFaceNet'] = GhostFaceNet.GhostFaceNetClient
+    
+    # TensorFlow-only models
+    facial_recognition_models['OpenFace'] = OpenFace.OpenFaceClient
+    facial_recognition_models['DeepFace'] = FbDeepFace.DeepFaceClient
+    facial_recognition_models['SFace'] = SFace.SFaceClient
+    facial_recognition_models['Dlib'] = Dlib.DlibClient
+except ImportError:
+    # TensorFlow not available, that's fine - we have TorchONNX models
+    pass
 
 
 def build_model(task: str, model_name: str) -> Any:
@@ -50,19 +122,7 @@ def build_model(task: str, model_name: str) -> Any:
     global cached_models
 
     models = {
-        "facial_recognition": {
-            "VGG-Face": VGGFace.VggFaceClient,
-            "OpenFace": OpenFace.OpenFaceClient,
-            "Facenet": Facenet.FaceNet128dClient,
-            "Facenet512": Facenet.FaceNet512dClient,
-            "DeepFace": FbDeepFace.DeepFaceClient,
-            "DeepID": DeepID.DeepIdClient,
-            "Dlib": Dlib.DlibClient,
-            "ArcFace": ArcFace.ArcFaceClient,
-            "SFace": SFace.SFaceClient,
-            "GhostFaceNet": GhostFaceNet.GhostFaceNetClient,
-            "Buffalo_L": Buffalo_L.Buffalo_L
-        },
+        "facial_recognition": facial_recognition_models,
         "spoofing": {
             "Fasnet": FasNet.Fasnet,
         },
@@ -86,6 +146,7 @@ def build_model(task: str, model_name: str) -> Any:
             "yunet": YuNet.YuNetClient,
             "fastmtcnn": FastMtCnn.FastMtCnnClient,
             "centerface": CenterFace.CenterFaceClient,
+            "yolox": YoloX.YOLOXFaceClient,  # Add YoloX detector
         },
     }
 

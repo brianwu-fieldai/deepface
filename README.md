@@ -1,5 +1,11 @@
 # deepface
 
+## For FieldAI Users Only
+Please access the internal Facial Recognition documentation on Notion [here](https://www.notion.so/Facial-Recognition-24f32e888e428094873ef729f501ae0d?source=copy_link).
+- [General Information](https://www.notion.so/DeepFace-Fork-for-Field-AI-26432e888e42800b8617cc131a18d8f7?source=copy_link)
+- [Setting up YOLO-X Training with Internal Face Dataset](https://www.notion.so/Setting-Up-YOLO-X-Training-With-Our-Curated-Facial-Dataset-26432e888e42805a9c9eebdd47dbe0ca?source=copy_link)
+- [Comprehensive Python API + CLI Usage Guide with ArcFace and YOLO-X Models](https://www.notion.so/Usage-Guide-ArcFace-YOLO-X-in-DeepFace-26832e888e4280f4ac16f70d91cea414?source=copy_link)
+
 <div align="center">
 
 [![Downloads](https://static.pepy.tech/personalized-badge/deepface?period=total&units=international_system&left_color=grey&right_color=blue&left_text=downloads)](https://pepy.tech/project/deepface)

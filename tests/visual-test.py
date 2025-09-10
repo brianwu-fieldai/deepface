@@ -20,6 +20,7 @@ model_names = [
     "DeepID",
     "Dlib",
     "ArcFace",
+    "ArcFaceTorchONNX",
     "SFace",
     "GhostFaceNet"
 ]

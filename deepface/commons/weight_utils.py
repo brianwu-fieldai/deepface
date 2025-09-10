@@ -11,13 +11,6 @@ import gdown
 from deepface.commons import folder_utils, package_utils
 from deepface.commons.logger import Logger
 
-
-tf_version = package_utils.get_tf_major_version()
-if tf_version == 1:
-    from keras.models import Sequential
-else:
-    from tensorflow.keras.models import Sequential
-
 logger = Logger()
 
 # pylint: disable=line-too-long, use-maxsplit-arg
@@ -77,9 +70,9 @@ def download_weights_if_necessary(
     return target_file
 
 
-def load_model_weights(model: Sequential, weight_file: str) -> Sequential:
+def load_model_weights(model, weight_file: str):
     """
-    Load pre-trained weights for a given model
+    Load pre-trained weights for a given model (DEPRECATED)
     Args:
         model (keras.models.Sequential): pre-built model
         weight_file (str): exact path of pre-trained weights
