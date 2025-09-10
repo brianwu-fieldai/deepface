@@ -458,7 +458,7 @@ def build_parser() -> argparse.ArgumentParser:
     common.add_argument("--model", default=None,
                         help="Model name (e.g., ArcFace, VGG-Face, Facenet512, ...)")
     common.add_argument("--detector", default=None,
-                        help="Detector backend (opencv, ssd, dlib, mtcnn, fastmtcnn, retinaface, mediapipe, yolov8, yolov11s, yolov11n, yolov11m, yunet, centerface)")
+                        help="Detector backend (opencv, ssd, dlib, mtcnn, fastmtcnn, retinaface, mediapipe, yolov8, yolov11s, yolov11n, yolov11m, yunet, centerface, yolox)")
     common.add_argument("--metric", default="cosine",
                         choices=["cosine","euclidean","euclidean_l2","angular"],
                         help="Distance metric for similarity (verify/find)")
